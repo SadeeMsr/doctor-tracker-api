@@ -84,6 +84,12 @@ Do not create new top-level folders, "utils" grab-bags, base classes or generic 
 ## HTTP conventions
 
 - Base path `/api/v1`. Resource names are plural nouns: `/doctors`, `/doctors/:id/patients`.
+  A sub-resource router uses `Router({ mergeParams: true })` and is mounted in `app.ts`
+  **before** its parent router (`/doctors/:id/patients` before `/doctors`).
+- **Date filters** use `from`/`to` (`dateRangeQuery`). A date-only `to` (`2026-11-10`) covers the
+  whole day. Patients filter on `admittedAt`; doctors on `createdAt`.
+- **Multi-value filters** accept `?condition=a,b` or `?condition=a&condition=b` (see
+  `conditionList` in `patient.schemas.ts`).
 - **Every handler is built with `handle(schemas, fn)`** from `presentation/http/shared/handle.ts`.
   It validates `params`/`query`/`body` with Zod and types `req` from the same schemas. Never
   read `req.body`/`req.query` without a schema, and never cast them.
@@ -278,8 +284,19 @@ restarts mid-request. Every endpoint must be safe to receive twice.
   - `runValidators: true` on updates
   - `returnDocument: 'after'`
   - keep denormalised fields (e.g. `nameLower`) in sync in the repository
-- **Multi-document invariants** (e.g. deleting a doctor and their patients) need a transaction
-  (`session.withTransaction`) or an explicit block; decide in the service and document it.
+- **Multi-document invariants** need a transaction (`session.withTransaction`) or an explicit
+  block; decide in the service and document it. Decided so far:
+  - **Deleting a doctor who still has patients is blocked** (`409 CONFLICT` with
+    `details.patientCount`), in `DoctorService.delete`. The admin reassigns
+    (`PATCH /patients/:id { doctorId }`) or removes the patients first; medical records are never
+    deleted as a side effect.
+- **Cross-collection reads** are composed in the application layer, one grouped query per page,
+  never one query per row:
+  - doctors' `patientCount` comes from `PatientRepository.countByDoctorIds`
+  - a patient list joins the doctor with `$lookup` placed **after** `$skip`/`$limit`, so it runs
+    for the page only
+- **Aggregation pipelines bypass Mongoose casting:** convert ids to `ObjectId` yourself in
+  `$match` stages (see `buildFilter` in `mongo-patient.repository.ts`).
 - Indexes build automatically in dev/test (`autoIndex`); production uses `pnpm db:sync-indexes`.
 
 ## TypeScript & code style
