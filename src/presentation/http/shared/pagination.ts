@@ -18,11 +18,20 @@ export const optionalText = (max: number) =>
     .optional()
     .transform((value) => value || undefined);
 
-/** `from`/`to` ISO dates with `from <= to`. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A date-only `to` (`2026-11-10`) means the end of that day, so the whole day is included. */
+const inclusiveEndDate = z.preprocess(
+  (value) =>
+    typeof value === 'string' && DATE_ONLY.test(value) ? `${value}T23:59:59.999Z` : value,
+  z.coerce.date().optional(),
+);
+
+/** `from`/`to` dates (ISO or `YYYY-MM-DD`) with `from <= to`. */
 export const dateRangeQuery = z
   .object({
     from: z.coerce.date().optional(),
-    to: z.coerce.date().optional(),
+    to: inclusiveEndDate,
   })
   .refine(({ from, to }) => !from || !to || from <= to, {
     message: '`from` must be before `to`',
