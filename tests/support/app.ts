@@ -1,11 +1,25 @@
 import { pino } from 'pino';
 
+import type { IdempotencyStore } from '../../src/application/ports/idempotency-store.js';
 import type { Services } from '../../src/container.js';
 import { createApp } from '../../src/presentation/http/app.js';
 
-export function buildTestApp(services: Services, isDatabaseHealthy = () => true) {
+import { InMemoryIdempotencyStore } from './in-memory-idempotency-store.js';
+
+interface TestAppDependencies {
+  services: Services;
+  idempotencyStore?: IdempotencyStore;
+  isDatabaseHealthy?: () => boolean;
+}
+
+export function buildTestApp({
+  services,
+  idempotencyStore = new InMemoryIdempotencyStore(),
+  isDatabaseHealthy = () => true,
+}: TestAppDependencies) {
   return createApp({
     services,
+    idempotencyStore,
     logger: pino({ level: 'silent' }),
     isDatabaseHealthy,
     options: { corsOrigins: ['http://localhost:3000'], trustProxy: 0, exposeErrorStack: false },

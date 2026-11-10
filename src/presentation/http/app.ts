@@ -9,15 +9,22 @@ import type { Logger } from 'pino';
 import { pinoHttp } from 'pino-http';
 
 import type { DoctorService } from '../../application/doctors/doctor.service.js';
+import type { IdempotencyStore } from '../../application/ports/idempotency-store.js';
 
 import { createDoctorRouter } from './doctors/doctor.routes.js';
 import { createHealthRouter } from './health/health.routes.js';
 import { createErrorHandler, notFoundHandler } from './middleware/error-handler.js';
+import {
+  createIdempotencyMiddleware,
+  IDEMPOTENCY_HEADER,
+  REPLAYED_HEADER,
+} from './middleware/idempotency.js';
 import { apiRateLimiter } from './middleware/rate-limit.js';
 
 /** Everything the HTTP layer needs, injected by the composition root (or by tests). */
 export interface AppDependencies {
   services: { doctors: DoctorService };
+  idempotencyStore: IdempotencyStore;
   logger: Logger;
   isDatabaseHealthy: () => boolean;
   options: {
@@ -29,6 +36,7 @@ export interface AppDependencies {
 
 export function createApp({
   services,
+  idempotencyStore,
   logger,
   isDatabaseHealthy,
   options,
@@ -65,14 +73,23 @@ export function createApp({
   );
 
   app.use(helmet());
-  app.use(cors({ origin: options.corsOrigins, credentials: true }));
+  app.use(
+    cors({
+      origin: options.corsOrigins,
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'X-Request-Id', IDEMPOTENCY_HEADER],
+      exposedHeaders: ['X-Request-Id', 'Location', REPLAYED_HEADER],
+    }),
+  );
   app.use(compression());
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 
+  const idempotent = createIdempotencyMiddleware(idempotencyStore);
+
   const api = express.Router();
   api.use('/health', createHealthRouter(isDatabaseHealthy));
-  api.use('/doctors', createDoctorRouter(services.doctors));
+  api.use('/doctors', createDoctorRouter(services.doctors, idempotent));
 
   app.use('/api/v1', apiRateLimiter, api);
 
