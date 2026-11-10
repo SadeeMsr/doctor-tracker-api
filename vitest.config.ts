@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    globalSetup: ['tests/global-setup.ts'],
     // Env is validated at import time, so tests get a deterministic config.
     env: {
       NODE_ENV: 'test',

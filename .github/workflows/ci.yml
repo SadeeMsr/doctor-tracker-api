@@ -22,6 +22,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The MongoDB binary used by integration tests (~120 MB); download it once per lockfile.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
