@@ -79,11 +79,11 @@ Build one vertical slice at a time, in this order. Mirror the file names of the 
    - `<feature>.schemas.ts` (Zod), `<feature>.presenter.ts`, `<feature>.controller.ts`,
      `<feature>.routes.ts`. Mount the router in `presentation/http/app.ts`.
 5. **Wire** the repository and service in `src/container.ts`, and extend `AppDependencies`.
-6. **Tests** (all required, see Testing):
-   - a contract suite in `tests/contract/`
-   - an in-memory fake in `tests/support/`
-   - service unit tests
-   - a Mongo contract run and HTTP integration tests
+6. **Tests** (lean; see Testing rules for what is worth a test):
+   - add the feature's contract to `tests/unit/in-memory-adapters.test.ts` and
+     `tests/integration/mongo-adapters.test.ts`, with its in-memory fake in `tests/support/`
+   - HTTP tests for the endpoints' main paths
+   - unit tests only for services with real logic
 
 Do not create new top-level folders, "utils" grab-bags, base classes or generic repositories.
 
@@ -188,13 +188,9 @@ shape**. Nothing else writes error responses.
 
 ### Testing errors
 
-Every new endpoint gets integration tests for its failure paths. Assert the **status, `code`
-and `details` shape**, not just "it fails":
-
-- validation → 422 with the field `path`s
-- not found → 404, including a malformed id
-- conflict → 409, if a unique field exists
-- unauthenticated → 401, once auth exists
+Test the failure modes a feature actually has, not every status code. Assert the **status and
+`code`** (and the field `path`s for 422), not just "it fails". Typical picks: one 422 with
+details, the 409 if there's a unique field, and the 404 for a malformed id.
 
 ## Idempotency
 
@@ -360,13 +356,30 @@ restarts mid-request. Every endpoint must be safe to receive twice.
 
 ## Testing rules
 
-- **Unit** (`tests/unit/`): services tested with in-memory fakes. No database, no HTTP.
-- **Contract** (`tests/contract/`): one `describe<Feature>RepositoryContract()` per port. It runs
-  against both the in-memory fake (unit) and Mongo (integration). If they disagree, fix the
-  fake or the adapter, never the contract.
+**Lean by design: every test must prove something a reviewer would care about.** Write a test
+when it proves one of these:
+
+- **an architectural claim:** the same contract passes against the in-memory fake and MongoDB
+- **a security or concurrency property:** race safety, token theft detection, rate limits,
+  forged tokens
+- **an endpoint's behaviour end to end:** the happy path and its main failure modes
+- **a bug fix:** it starts with a failing test
+
+Don't write tests for trivial pass-throughs (a service method that only calls the repository),
+getters, framework behaviour, or a second variation of something already covered. Aim for
+about 2–5 focused tests per area, each named for the behaviour it proves.
+
+- **Contract** (`tests/contract/`):
+  - one `describe<Port>Contract()` per port, holding only its non-obvious guarantees
+  - run from `tests/unit/in-memory-adapters.test.ts` (fakes) and
+    `tests/integration/mongo-adapters.test.ts` (MongoDB)
+  - if the two disagree, fix the fake or the adapter, never the contract
+- **Unit** (`tests/unit/`): services with real logic (e.g. `AuthService`), using in-memory fakes.
+  No database, no HTTP.
 - **Integration** (`tests/integration/`):
-  - Supertest against `buildTestApp()`, using `useMongoMemoryServer()` for real indexes
-  - assert status, envelope shape and error `code`, not just "it works"
+  - Supertest against `buildTestApp()`, with `useMongoMemoryServer()` for real indexes
+  - sign in with `signIn()` from `tests/support/auth.ts` for protected routes
+  - assert status and error `code`, not just "it works"
 - Build test data with the builders in `tests/support/fixtures.ts`. Tests are independent
   (collections are wiped after each test) and never hit the network or a real database.
 - A bug fix starts with a failing test.
@@ -397,7 +410,8 @@ restarts mid-request. Every endpoint must be safe to receive twice.
 - [ ] Repeating any request is safe: PATCH only assigns values, creates hit a unique index or
       `Idempotency-Key`, and DELETE leaves the same state.
 - [ ] Every new query filter/sort is indexed, and each index is justified in a comment.
-- [ ] Tests are written (contract + unit + integration as applicable) and pass.
+- [ ] The tests that prove the feature (see Testing rules) are written and pass, and none are
+      filler.
 - [ ] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` all pass.
 - [ ] You exercised it for real (curl or the web app) and reported exactly what was verified.
 - [ ] No TODOs, dead code, commented-out code or stray `console` calls.
