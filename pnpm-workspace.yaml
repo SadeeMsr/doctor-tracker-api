@@ -1,0 +1,8 @@
+allowBuilds:
+  argon2: true
+  esbuild: true
+  # Downloads the MongoDB binary lazily on first test run instead of at install time.
+  mongodb-memory-server: false
+
+# Refuse to install on a Node version outside package.json "engines".
+engineStrict: true

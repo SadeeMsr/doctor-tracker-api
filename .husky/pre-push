@@ -1,0 +1,2 @@
+# Unit + integration tests (in-memory MongoDB) before code leaves the machine.
+pnpm test
