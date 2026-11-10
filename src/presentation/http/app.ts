@@ -10,6 +10,7 @@ import { pinoHttp } from 'pino-http';
 
 import type { AuthService } from '../../application/auth/auth.service.js';
 import type { DoctorService } from '../../application/doctors/doctor.service.js';
+import type { PatientService } from '../../application/patients/patient.service.js';
 import type { IdempotencyStore } from '../../application/ports/idempotency-store.js';
 
 import { createAuthRouter } from './auth/auth.routes.js';
@@ -23,10 +24,11 @@ import {
 } from './middleware/idempotency.js';
 import { createApiRateLimiter, createLoginRateLimiter } from './middleware/rate-limit.js';
 import { createRequireAuth } from './middleware/require-auth.js';
+import { createDoctorPatientsRouter, createPatientRouter } from './patients/patient.routes.js';
 
 /** Everything the HTTP layer needs, injected by the composition root (or by tests). */
 export interface AppDependencies {
-  services: { doctors: DoctorService; auth: AuthService };
+  services: { doctors: DoctorService; patients: PatientService; auth: AuthService };
   idempotencyStore: IdempotencyStore;
   logger: Logger;
   isDatabaseHealthy: () => boolean;
@@ -106,7 +108,13 @@ export function createApp({
     }),
   );
   // Everything below requires a signed-in user.
+  api.use(
+    '/doctors/:id/patients',
+    requireAuth,
+    createDoctorPatientsRouter(services.patients, idempotent),
+  );
   api.use('/doctors', requireAuth, createDoctorRouter(services.doctors, idempotent));
+  api.use('/patients', requireAuth, createPatientRouter(services.patients));
 
   app.use('/api/v1', createApiRateLimiter(), api);
 

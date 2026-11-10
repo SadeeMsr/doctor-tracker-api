@@ -1,20 +1,15 @@
 import { z } from 'zod';
 
 import { SPECIALIZATIONS } from '../../../domain/doctor/doctor.entity.js';
+import { emailField, personName, phoneField } from '../shared/fields.js';
 import { dateRangeQuery, optionalText, paginationQuery } from '../shared/pagination.js';
 
-const email = z.string().trim().toLowerCase().max(254).pipe(z.email('Invalid email address'));
-const phone = z
-  .string()
-  .trim()
-  .regex(/^\+?[0-9][0-9\s\-()]{6,19}$/, 'Invalid phone number');
-
 export const createDoctorBody = z.object({
-  name: z.string().trim().min(2).max(120),
+  name: personName,
   specialization: z.enum(SPECIALIZATIONS),
   hospital: z.string().trim().min(2).max(160),
-  phone,
-  email,
+  phone: phoneField,
+  email: emailField,
 });
 
 export const updateDoctorBody = createDoctorBody

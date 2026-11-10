@@ -1,9 +1,11 @@
 import { AuthService } from './application/auth/auth.service.js';
 import { DoctorService } from './application/doctors/doctor.service.js';
+import { PatientService } from './application/patients/patient.service.js';
 import type { IdempotencyStore } from './application/ports/idempotency-store.js';
 import { UserService } from './application/users/user.service.js';
 import { env } from './config/env.js';
 import { MongoDoctorRepository } from './infrastructure/database/mongoose/repositories/mongo-doctor.repository.js';
+import { MongoPatientRepository } from './infrastructure/database/mongoose/repositories/mongo-patient.repository.js';
 import { MongoIdempotencyStore } from './infrastructure/database/mongoose/repositories/mongo-idempotency-store.js';
 import { MongoSessionRepository } from './infrastructure/database/mongoose/repositories/mongo-session.repository.js';
 import { MongoUserRepository } from './infrastructure/database/mongoose/repositories/mongo-user.repository.js';
@@ -13,6 +15,7 @@ import { JwtTokenService } from './infrastructure/security/jwt-token-service.js'
 export interface Container {
   services: {
     doctors: DoctorService;
+    patients: PatientService;
     auth: AuthService;
     users: UserService;
   };
@@ -26,6 +29,8 @@ export interface Container {
  */
 export function buildContainer(): Container {
   const users = new MongoUserRepository();
+  const doctors = new MongoDoctorRepository();
+  const patients = new MongoPatientRepository();
   const hasher = new Argon2PasswordHasher();
   const tokens = new JwtTokenService({
     accessTokenSecret: env.JWT_ACCESS_SECRET,
@@ -34,7 +39,8 @@ export function buildContainer(): Container {
 
   return {
     services: {
-      doctors: new DoctorService(new MongoDoctorRepository()),
+      doctors: new DoctorService(doctors, patients),
+      patients: new PatientService(patients, doctors),
       auth: new AuthService({
         users,
         sessions: new MongoSessionRepository(),
