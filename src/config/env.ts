@@ -21,21 +21,22 @@ const EnvSchema = z.object({
   /** Number of reverse proxies in front of the app (Render = 1). Needed for correct client IPs. */
   TRUST_PROXY: z.coerce.number().int().min(0).default(1),
 
+  /** Signs access tokens. Refresh tokens are opaque random strings, so they need no secret. */
   JWT_ACCESS_SECRET: z.string().min(32, 'Use at least 32 characters'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'Use at least 32 characters'),
   JWT_ACCESS_TTL_SECONDS: z.coerce
     .number()
     .int()
     .positive()
     .default(15 * 60),
-  JWT_REFRESH_TTL_SECONDS: z.coerce
+  REFRESH_TOKEN_TTL_SECONDS: z.coerce
     .number()
     .int()
     .positive()
     .default(7 * 24 * 60 * 60),
 
-  /** Used by `pnpm seed` to create the demo admin account. */
+  /** Used by `pnpm db:create-admin` to provision the demo admin account. */
   SEED_ADMIN_EMAIL: z.email().default('admin@doctortracker.dev'),
+  SEED_ADMIN_NAME: z.string().trim().min(1).default('Admin'),
   SEED_ADMIN_PASSWORD: z.string().min(8).default('Admin@12345'),
 });
 

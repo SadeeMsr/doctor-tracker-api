@@ -8,9 +8,11 @@ import helmet from 'helmet';
 import type { Logger } from 'pino';
 import { pinoHttp } from 'pino-http';
 
+import type { AuthService } from '../../application/auth/auth.service.js';
 import type { DoctorService } from '../../application/doctors/doctor.service.js';
 import type { IdempotencyStore } from '../../application/ports/idempotency-store.js';
 
+import { createAuthRouter } from './auth/auth.routes.js';
 import { createDoctorRouter } from './doctors/doctor.routes.js';
 import { createHealthRouter } from './health/health.routes.js';
 import { createErrorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -19,11 +21,12 @@ import {
   IDEMPOTENCY_HEADER,
   REPLAYED_HEADER,
 } from './middleware/idempotency.js';
-import { apiRateLimiter } from './middleware/rate-limit.js';
+import { createApiRateLimiter, createLoginRateLimiter } from './middleware/rate-limit.js';
+import { createRequireAuth } from './middleware/require-auth.js';
 
 /** Everything the HTTP layer needs, injected by the composition root (or by tests). */
 export interface AppDependencies {
-  services: { doctors: DoctorService };
+  services: { doctors: DoctorService; auth: AuthService };
   idempotencyStore: IdempotencyStore;
   logger: Logger;
   isDatabaseHealthy: () => boolean;
@@ -31,6 +34,8 @@ export interface AppDependencies {
     corsOrigins: string[];
     trustProxy: number;
     exposeErrorStack: boolean;
+    /** HTTPS-only auth cookies (production). */
+    secureCookies: boolean;
   };
 }
 
@@ -86,12 +91,24 @@ export function createApp({
   app.use(cookieParser());
 
   const idempotent = createIdempotencyMiddleware(idempotencyStore);
+  const requireAuth = createRequireAuth(services.auth);
+  const cookies = { secure: options.secureCookies };
 
   const api = express.Router();
+  // Public: health checks and the auth endpoints themselves.
   api.use('/health', createHealthRouter(isDatabaseHealthy));
-  api.use('/doctors', createDoctorRouter(services.doctors, idempotent));
+  api.use(
+    '/auth',
+    createAuthRouter(services.auth, {
+      requireAuth,
+      loginRateLimiter: createLoginRateLimiter(),
+      cookies,
+    }),
+  );
+  // Everything below requires a signed-in user.
+  api.use('/doctors', requireAuth, createDoctorRouter(services.doctors, idempotent));
 
-  app.use('/api/v1', apiRateLimiter, api);
+  app.use('/api/v1', createApiRateLimiter(), api);
 
   app.use(notFoundHandler);
   app.use(createErrorHandler({ exposeStack: options.exposeErrorStack }));

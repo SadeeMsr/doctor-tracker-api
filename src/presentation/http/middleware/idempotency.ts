@@ -83,10 +83,10 @@ export function createIdempotencyMiddleware(store: IdempotencyStore): Idempotenc
         );
       }
 
-      // Scoped by endpoint. Once `requireAuth` exists, the authenticated user id joins the scope.
+      // Scoped by user and endpoint, so one user's key can never replay another user's response.
       // `/doctors` and `/doctors/` are the same endpoint, so drop a trailing slash.
       const path = `${req.baseUrl}${req.path}`.replace(/\/+$/, '');
-      const key = `${req.method} ${path} ${clientKey}`;
+      const key = `${req.auth?.userId ?? 'anonymous'} ${req.method} ${path} ${clientKey}`;
       const requestHash = hashBody(req.body);
       const claim = await store.claim(key, requestHash);
 

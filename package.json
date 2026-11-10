@@ -19,7 +19,8 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "db:sync-indexes": "node --env-file-if-exists=.env dist/scripts/sync-indexes.js",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:create-admin": "node --env-file-if-exists=.env dist/scripts/create-admin.js"
   },
   "dependencies": {
     "argon2": "^0.45.2",
