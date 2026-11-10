@@ -1,5 +1,5 @@
 import { env, isProduction } from './config/env.js';
-import { buildServices } from './container.js';
+import { buildContainer } from './container.js';
 import {
   connectDatabase,
   disconnectDatabase,
@@ -12,7 +12,7 @@ async function bootstrap(): Promise<void> {
   await connectDatabase({ uri: env.MONGODB_URI, logger, autoIndex: !isProduction });
 
   const app = createApp({
-    services: buildServices(),
+    ...buildContainer(),
     logger,
     isDatabaseHealthy: isDatabaseConnected,
     options: {
@@ -49,8 +49,14 @@ async function bootstrap(): Promise<void> {
   });
 }
 
+// Crash-only: after an unexpected failure the process state is unknown, so log and exit and
+// let the platform restart a clean instance.
 process.on('unhandledRejection', (reason) => {
   logger.fatal({ err: reason }, 'Unhandled promise rejection');
+  process.exit(1);
+});
+process.on('uncaughtException', (error) => {
+  logger.fatal({ err: error }, 'Uncaught exception');
   process.exit(1);
 });
 

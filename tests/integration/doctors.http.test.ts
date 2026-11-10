@@ -1,13 +1,13 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
-import { buildServices } from '../../src/container.js';
+import { buildContainer } from '../../src/container.js';
 import { buildTestApp } from '../support/app.js';
 import { aDoctor } from '../support/fixtures.js';
 import { useMongoMemoryServer } from '../support/mongo.js';
 
 useMongoMemoryServer();
-const app = buildTestApp(buildServices());
+const app = buildTestApp(buildContainer());
 
 describe('Doctors HTTP API', () => {
   it('creates a doctor and returns 201 with a Location header', async () => {

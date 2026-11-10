@@ -6,6 +6,8 @@ export type HttpErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'TOO_MANY_REQUESTS'
+  | 'IDEMPOTENCY_KEY_REUSED'
+  | 'IDEMPOTENCY_IN_PROGRESS'
   | 'INTERNAL_ERROR';
 
 /** Transport-level errors (bad JSON, unknown route, rate limit) that never reach the domain. */
