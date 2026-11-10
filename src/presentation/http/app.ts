@@ -8,11 +8,13 @@ import helmet from 'helmet';
 import type { Logger } from 'pino';
 import { pinoHttp } from 'pino-http';
 
+import type { AnalyticsService } from '../../application/analytics/analytics.service.js';
 import type { AuthService } from '../../application/auth/auth.service.js';
 import type { DoctorService } from '../../application/doctors/doctor.service.js';
 import type { PatientService } from '../../application/patients/patient.service.js';
 import type { IdempotencyStore } from '../../application/ports/idempotency-store.js';
 
+import { createAnalyticsRouter } from './analytics/analytics.routes.js';
 import { createAuthRouter } from './auth/auth.routes.js';
 import { createDoctorRouter } from './doctors/doctor.routes.js';
 import { createHealthRouter } from './health/health.routes.js';
@@ -28,7 +30,12 @@ import { createDoctorPatientsRouter, createPatientRouter } from './patients/pati
 
 /** Everything the HTTP layer needs, injected by the composition root (or by tests). */
 export interface AppDependencies {
-  services: { doctors: DoctorService; patients: PatientService; auth: AuthService };
+  services: {
+    doctors: DoctorService;
+    patients: PatientService;
+    analytics: AnalyticsService;
+    auth: AuthService;
+  };
   idempotencyStore: IdempotencyStore;
   logger: Logger;
   isDatabaseHealthy: () => boolean;
@@ -115,6 +122,7 @@ export function createApp({
   );
   api.use('/doctors', requireAuth, createDoctorRouter(services.doctors, idempotent));
   api.use('/patients', requireAuth, createPatientRouter(services.patients));
+  api.use('/analytics', requireAuth, createAnalyticsRouter(services.analytics));
 
   app.use('/api/v1', createApiRateLimiter(), api);
 
