@@ -22,6 +22,11 @@ export function buildTestApp({
     idempotencyStore,
     logger: pino({ level: 'silent' }),
     isDatabaseHealthy,
-    options: { corsOrigins: ['http://localhost:3000'], trustProxy: 0, exposeErrorStack: false },
+    options: {
+      corsOrigins: ['http://localhost:3000'],
+      trustProxy: 0,
+      exposeErrorStack: false,
+      secureCookies: false,
+    },
   });
 }

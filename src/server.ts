@@ -19,6 +19,7 @@ async function bootstrap(): Promise<void> {
       corsOrigins: env.CORS_ORIGINS,
       trustProxy: env.TRUST_PROXY,
       exposeErrorStack: !isProduction,
+      secureCookies: isProduction,
     },
   });
 

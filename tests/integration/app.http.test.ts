@@ -1,12 +1,11 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
-import { DoctorService } from '../../src/application/doctors/doctor.service.js';
 import { buildTestApp } from '../support/app.js';
-import { InMemoryDoctorRepository } from '../support/in-memory-doctor.repository.js';
+import { buildInMemoryContainer } from '../support/in-memory-container.js';
 
 // The whole HTTP stack, backed by in-memory adapters: no database required.
-const services = { doctors: new DoctorService(new InMemoryDoctorRepository()) };
+const { services } = buildInMemoryContainer();
 
 describe('app', () => {
   it('reports degraded health when the database is down', async () => {

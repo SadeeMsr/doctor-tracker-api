@@ -2,12 +2,13 @@ import express from 'express';
 import { pino } from 'pino';
 import { pinoHttp } from 'pino-http';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { buildContainer } from '../../src/container.js';
 import { createErrorHandler } from '../../src/presentation/http/middleware/error-handler.js';
 import { createIdempotencyMiddleware } from '../../src/presentation/http/middleware/idempotency.js';
 import { buildTestApp } from '../support/app.js';
+import { signIn } from '../support/auth.js';
 import { aDoctor } from '../support/fixtures.js';
 import { InMemoryIdempotencyStore } from '../support/in-memory-idempotency-store.js';
 import { useMongoMemoryServer } from '../support/mongo.js';
@@ -19,12 +20,21 @@ const app = buildTestApp(container);
 const KEY = 'Idempotency-Key';
 
 describe('Idempotency-Key on POST /doctors', () => {
+  let agent: Awaited<ReturnType<typeof signIn>>['agent'];
+  let userId: string;
+
+  beforeEach(async () => {
+    const session = await signIn(app, container.services);
+    agent = session.agent;
+    userId = session.user.id;
+  });
+
   it('replays the original response for a retried request and creates only one doctor', async () => {
     const body = aDoctor();
 
-    const first = await request(app).post('/api/v1/doctors').set(KEY, 'key-1').send(body);
-    const retry = await request(app).post('/api/v1/doctors').set(KEY, 'key-1').send(body);
-    const list = await request(app).get('/api/v1/doctors');
+    const first = await agent.post('/api/v1/doctors').set(KEY, 'key-1').send(body);
+    const retry = await agent.post('/api/v1/doctors').set(KEY, 'key-1').send(body);
+    const list = await agent.get('/api/v1/doctors');
 
     expect(first.status).toBe(201);
     expect(first.headers['idempotent-replayed']).toBeUndefined();
@@ -36,8 +46,8 @@ describe('Idempotency-Key on POST /doctors', () => {
   });
 
   it('rejects the same key with a different body', async () => {
-    await request(app).post('/api/v1/doctors').set(KEY, 'key-2').send(aDoctor());
-    const res = await request(app).post('/api/v1/doctors').set(KEY, 'key-2').send(aDoctor());
+    await agent.post('/api/v1/doctors').set(KEY, 'key-2').send(aDoctor());
+    const res = await agent.post('/api/v1/doctors').set(KEY, 'key-2').send(aDoctor());
 
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe('IDEMPOTENCY_KEY_REUSED');
@@ -46,14 +56,15 @@ describe('Idempotency-Key on POST /doctors', () => {
   it('returns 409 while the original request is still in flight', async () => {
     const store = new InMemoryIdempotencyStore();
     const inFlightApp = buildTestApp({ ...container, idempotencyStore: store });
+    const inFlight = (await signIn(inFlightApp, container.services)).agent;
     const body = aDoctor();
     const { createHash } = await import('node:crypto');
     await store.claim(
-      'POST /api/v1/doctors key-3',
+      `${userId} POST /api/v1/doctors key-3`,
       createHash('sha256').update(JSON.stringify(body)).digest('hex'),
     );
 
-    const res = await request(inFlightApp).post('/api/v1/doctors').set(KEY, 'key-3').send(body);
+    const res = await inFlight.post('/api/v1/doctors').set(KEY, 'key-3').send(body);
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('IDEMPOTENCY_IN_PROGRESS');
@@ -62,21 +73,21 @@ describe('Idempotency-Key on POST /doctors', () => {
   it('replays a stored 4xx instead of re-running the request', async () => {
     const invalid = { ...aDoctor(), email: 'not-an-email' };
 
-    await request(app).post('/api/v1/doctors').set(KEY, 'key-4').send(invalid);
-    const retry = await request(app).post('/api/v1/doctors').set(KEY, 'key-4').send(invalid);
+    await agent.post('/api/v1/doctors').set(KEY, 'key-4').send(invalid);
+    const retry = await agent.post('/api/v1/doctors').set(KEY, 'key-4').send(invalid);
 
     expect(retry.status).toBe(422);
     expect(retry.headers['idempotent-replayed']).toBe('true');
   });
 
   it('rejects a malformed key', async () => {
-    const res = await request(app).post('/api/v1/doctors').set(KEY, 'has spaces').send(aDoctor());
+    const res = await agent.post('/api/v1/doctors').set(KEY, 'has spaces').send(aDoctor());
 
     expect(res.status).toBe(400);
   });
 
   it('still works without a key on an optional endpoint', async () => {
-    const res = await request(app).post('/api/v1/doctors').send(aDoctor());
+    const res = await agent.post('/api/v1/doctors').send(aDoctor());
 
     expect(res.status).toBe(201);
   });
