@@ -8,23 +8,22 @@ changing anything. If a rule blocks you, stop and ask; do not work around it.
 REST API for an admin portal that manages doctors and their patients, with dashboard analytics.
 
 - **Runtime:** Node 26 LTS (`.nvmrc`), ESM only (`"type": "module"`), pnpm 12.
-- **Stack:** Express 5, TypeScript 6 (strict), Mongoose 9 on MongoDB, Zod 4, pino, Vitest.
+- **Stack:** Express 5, TypeScript 6 (strict), Mongoose 9 on MongoDB, Zod 4, pino.
 - **Frontend:** a separate repo (`doctor-tracker-web`, Next.js). It proxies `/api/*` to this
   server, so the API never renders HTML and never assumes a browser origin.
 
 ## Commands
 
-| Task                  | Command                                                            |
-| --------------------- | ------------------------------------------------------------------ |
-| Dev server (watch)    | `pnpm dev`                                                         |
-| Lint / types / format | `pnpm lint` · `pnpm typecheck` · `pnpm format`                     |
-| All tests             | `pnpm test` (unit + integration; MongoDB runs in memory, no setup) |
-| One suite             | `pnpm test:unit` · `pnpm test:integration`                         |
-| Build / start         | `pnpm build` · `pnpm start`                                        |
-| Production indexes    | `pnpm db:sync-indexes` (after build)                               |
-| Admin account         | `pnpm db:create-admin` (after build; reads `SEED_ADMIN_*`)         |
+| Task                  | Command                                                    |
+| --------------------- | ---------------------------------------------------------- |
+| Dev server (watch)    | `pnpm dev`                                                 |
+| Lint / types / format | `pnpm lint` · `pnpm typecheck` · `pnpm format`             |
+| Build / start         | `pnpm build` · `pnpm start`                                |
+| Production indexes    | `pnpm db:sync-indexes` (after build)                       |
+| Admin account         | `pnpm db:create-admin` (after build; reads `SEED_ADMIN_*`) |
 
-Run `pnpm lint && pnpm typecheck && pnpm test` before you say something is done.
+Run `pnpm lint && pnpm typecheck && pnpm build` before you say something is done, then exercise
+the change for real (curl or the web app).
 
 ## Architecture: Clean Architecture (non-negotiable)
 
@@ -79,11 +78,6 @@ Build one vertical slice at a time, in this order. Mirror the file names of the 
    - `<feature>.schemas.ts` (Zod), `<feature>.presenter.ts`, `<feature>.controller.ts`,
      `<feature>.routes.ts`. Mount the router in `presentation/http/app.ts`.
 5. **Wire** the repository and service in `src/container.ts`, and extend `AppDependencies`.
-6. **Tests** (all required, see Testing):
-   - a contract suite in `tests/contract/`
-   - an in-memory fake in `tests/support/`
-   - service unit tests
-   - a Mongo contract run and HTTP integration tests
 
 Do not create new top-level folders, "utils" grab-bags, base classes or generic repositories.
 
@@ -186,15 +180,11 @@ shape**. Nothing else writes error responses.
   `0`. Force-exit after 10 s.
 - `/health` returns `503` when the database is down, so the platform can route around it.
 
-### Testing errors
+### Checking errors
 
-Every new endpoint gets integration tests for its failure paths. Assert the **status, `code`
-and `details` shape**, not just "it fails":
-
-- validation → 422 with the field `path`s
-- not found → 404, including a malformed id
-- conflict → 409, if a unique field exists
-- unauthenticated → 401, once auth exists
+When you finish an endpoint, call its failure paths with curl and check the **status, `code`
+and `details` shape**: one 422 with field `path`s, the 409 if there's a unique field, the 404
+for a malformed id, and the 401 without a session.
 
 ## Idempotency
 
@@ -237,8 +227,6 @@ restarts mid-request. Every endpoint must be safe to receive twice.
      - Mongo adapter: `infrastructure/.../repositories/mongo-idempotency-store.ts` (collection
        `idempotency_keys`, unique index on the scoped key, TTL index on `createdAt`)
      - middleware: `presentation/http/middleware/idempotency.ts`, injected via `AppDependencies`
-     - tests: `tests/contract/idempotency-store.contract.ts` and
-       `tests/integration/idempotency.http.test.ts`
    - **Using it on a route:** `router.post('/', idempotent({ required: true }), controller.create)`.
      The router factory receives `idempotent` from `app.ts`.
    - A claim left unfinished for 60 s (the process died mid-request) can be taken over.
@@ -309,7 +297,7 @@ restarts mid-request. Every endpoint must be safe to receive twice.
   - files are kebab-case with a role suffix (`*.entity.ts`, `*.repository.ts`, `*.service.ts`,
     `*.model.ts`, `*.controller.ts`, `*.routes.ts`, `*.schemas.ts`, `*.presenter.ts`)
   - classes PascalCase; functions and variables camelCase
-  - Mongo adapters are prefixed `Mongo`; test fakes `InMemory`
+  - Mongo adapters are prefixed `Mongo`
 - **No `any`**, no non-null `!` assertions, no `as unknown as` except at a framework boundary,
   with a comment explaining why.
 - `eslint-disable` only for a single line, with a comment giving the reason. Never weaken
@@ -358,25 +346,19 @@ restarts mid-request. Every endpoint must be safe to receive twice.
     `.env.example` (with a placeholder) in the same change
   - never hard-code a secret, URI or credential
 
-## Testing rules
+## Tests
 
-- **Unit** (`tests/unit/`): services tested with in-memory fakes. No database, no HTTP.
-- **Contract** (`tests/contract/`): one `describe<Feature>RepositoryContract()` per port. It runs
-  against both the in-memory fake (unit) and Mongo (integration). If they disagree, fix the
-  fake or the adapter, never the contract.
-- **Integration** (`tests/integration/`):
-  - Supertest against `buildTestApp()`, using `useMongoMemoryServer()` for real indexes
-  - assert status, envelope shape and error `code`, not just "it works"
-- Build test data with the builders in `tests/support/fixtures.ts`. Tests are independent
-  (collections are wiped after each test) and never hit the network or a real database.
-- A bug fix starts with a failing test.
+**Deferred.** The project focuses on finishing the app first. Don't add test files, test
+dependencies or test scripts unless you are explicitly asked to. The architecture keeps tests
+cheap to add later: every port can take an in-memory fake, and `createApp()` takes all its
+dependencies as arguments.
 
 ## Git workflow
 
 - One branch per slice: `feat/<slice>`, `fix/<thing>`, `chore/<thing>`. Never commit to `main`
   directly; merge via PR with CI green.
 - Conventional Commits (commitlint enforces): `feat(doctors): add hospital filter`.
-- **Hooks:** pre-commit runs lint-staged + typecheck, and pre-push runs the tests. Never bypass
+- **Hooks:** pre-commit runs lint-staged + typecheck, and pre-push runs `pnpm build`. Never bypass
   them (`--no-verify`, `HUSKY=0`); fix the cause.
 - Never commit `.env`, credentials, `dist/` or coverage output. Never hand-edit `pnpm-lock.yaml`.
 
@@ -385,20 +367,19 @@ restarts mid-request. Every endpoint must be safe to receive twice.
 - add, remove or upgrade a dependency
 - change the architecture, folder layout, response envelope, error codes or lint/TS config
 - change an existing index or a public endpoint's contract
-- delete or rewrite tests
+- add tests or test tooling (deferred; see Tests)
 - do anything not asked for (no drive-by refactors, no speculative abstractions, no new
   features "while you're there")
 
 ## Definition of done
 
 - [ ] It follows the layer rules and the doctors template.
-- [ ] Inputs are validated; errors map to the right status and code, and failure paths are
-      tested.
+- [ ] Inputs are validated; errors map to the right status and code, and you checked the
+      failure paths with curl.
 - [ ] Repeating any request is safe: PATCH only assigns values, creates hit a unique index or
       `Idempotency-Key`, and DELETE leaves the same state.
 - [ ] Every new query filter/sort is indexed, and each index is justified in a comment.
-- [ ] Tests are written (contract + unit + integration as applicable) and pass.
-- [ ] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` all pass.
+- [ ] `pnpm lint && pnpm typecheck && pnpm build` all pass.
 - [ ] You exercised it for real (curl or the web app) and reported exactly what was verified.
 - [ ] No TODOs, dead code, commented-out code or stray `console` calls.
 - [ ] `.env.example` and the README are updated if config or setup changed.
