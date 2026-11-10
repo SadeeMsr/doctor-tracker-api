@@ -1,9 +1,12 @@
+import { AnalyticsService } from './application/analytics/analytics.service.js';
 import { AuthService } from './application/auth/auth.service.js';
 import { DoctorService } from './application/doctors/doctor.service.js';
 import { PatientService } from './application/patients/patient.service.js';
 import type { IdempotencyStore } from './application/ports/idempotency-store.js';
 import { UserService } from './application/users/user.service.js';
 import { env } from './config/env.js';
+import { CachedAnalyticsQuery } from './infrastructure/cache/cached-analytics-query.js';
+import { MongoAnalyticsQuery } from './infrastructure/database/mongoose/repositories/mongo-analytics-query.js';
 import { MongoDoctorRepository } from './infrastructure/database/mongoose/repositories/mongo-doctor.repository.js';
 import { MongoPatientRepository } from './infrastructure/database/mongoose/repositories/mongo-patient.repository.js';
 import { MongoIdempotencyStore } from './infrastructure/database/mongoose/repositories/mongo-idempotency-store.js';
@@ -16,6 +19,7 @@ export interface Container {
   services: {
     doctors: DoctorService;
     patients: PatientService;
+    analytics: AnalyticsService;
     auth: AuthService;
     users: UserService;
   };
@@ -41,6 +45,10 @@ export function buildContainer(): Container {
     services: {
       doctors: new DoctorService(doctors, patients),
       patients: new PatientService(patients, doctors),
+      // Repeated dashboard loads within 30 s are answered from memory.
+      analytics: new AnalyticsService(
+        new CachedAnalyticsQuery(new MongoAnalyticsQuery(), { ttlMs: 30_000 }),
+      ),
       auth: new AuthService({
         users,
         sessions: new MongoSessionRepository(),
