@@ -295,6 +295,18 @@ restarts mid-request. Every endpoint must be safe to receive twice.
   - doctors' `patientCount` comes from `PatientRepository.countByDoctorIds`
   - a patient list joins the doctor with `$lookup` placed **after** `$skip`/`$limit`, so it runs
     for the page only
+- **Return real promises from adapters:** end queries with `.exec()` (or `await` them inside an
+  `async` method). A Mongoose query is a thenable that runs again every time it's awaited, which
+  breaks anything that shares the result (caches, `Promise.all` reuse).
+- **Analytics** (`GET /analytics/summary`):
+  - read-side port `AnalyticsQuery` in `application/ports/`, one method per aggregate query
+  - `AnalyticsService` runs them in parallel and does the pure work: windows, zero-filled UTC
+    buckets (`time-buckets.ts`, weeks start Monday, matching `$dateTrunc`), % change, and bucket
+    limits
+  - totals use `estimatedDocumentCount()` (metadata, O(1)); date-ranged counts use the
+    `admittedAt` index
+  - caching is a decorator (`CachedAnalyticsQuery`, 30 s TTL) wired in `container.ts`; the
+    service and adapter don't know it exists. It's per process, so use Redis when scaling out.
 - **Aggregation pipelines bypass Mongoose casting:** convert ids to `ObjectId` yourself in
   `$match` stages (see `buildFilter` in `mongo-patient.repository.ts`).
 - Indexes build automatically in dev/test (`autoIndex`); production uses `pnpm db:sync-indexes`.
