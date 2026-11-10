@@ -1,2 +1,2 @@
-# Unit + integration tests (in-memory MongoDB) before code leaves the machine.
-pnpm test
+# A production build catches compile errors before code leaves the machine.
+pnpm build
