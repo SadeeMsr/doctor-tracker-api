@@ -22,6 +22,7 @@ REST API for an admin portal that manages doctors and their patients, with dashb
 | One suite             | `pnpm test:unit` · `pnpm test:integration`                         |
 | Build / start         | `pnpm build` · `pnpm start`                                        |
 | Production indexes    | `pnpm db:sync-indexes` (after build)                               |
+| Admin account         | `pnpm db:create-admin` (after build; reads `SEED_ADMIN_*`)         |
 
 Run `pnpm lint && pnpm typecheck && pnpm test` before you say something is done.
 
@@ -252,12 +253,13 @@ restarts mid-request. Every endpoint must be safe to receive twice.
 - **Auth:**
   - **Logout always returns `204`** and clears the cookies, even with no session or one that's
     already revoked.
-  - **Rotate refresh tokens with one conditional atomic update** (`findOneAndUpdate` where the
-    hash matches and the token isn't revoked), so two concurrent refreshes can't both succeed.
-  - **A revoked refresh token used again is token theft.** Revoke all of that user's sessions.
+  - **Rotate refresh tokens with one conditional atomic update** (`revokeIfActive`: matches the
+    hash, unrevoked and unexpired), so two concurrent refreshes can't both rotate.
+  - **A rotated token reused after the grace window is token theft.** Revoke all of that user's
+    sessions (see Security rules).
 - **Scripts:**
-  - `pnpm seed` upserts by natural key (`email`), so running it twice gives the same data, not
-    double
+  - `pnpm db:create-admin` and `pnpm seed` upsert by natural key (`email`), so running them
+    twice gives the same data, not double
   - `db:sync-indexes` is naturally repeatable
 - **Server-side retries:**
   - Keep `retryWrites=true` in the Mongo URI; the driver's retryable writes are exactly-once.
@@ -321,19 +323,35 @@ restarts mid-request. Every endpoint must be safe to receive twice.
 
 ## Security rules
 
-> The auth pieces named below (`PasswordHasher`, `requireAuth`, `requireRole`, token cookies)
-> arrive in the `feat/auth` slice. Until they exist, build them to these rules; don't invent
-> different ones.
-
-- Passwords: argon2id via a `PasswordHasher` port. Never store or log plaintext.
-- **Auth tokens:**
-  - JWT access + refresh tokens in `httpOnly`, `secure` (in prod), `sameSite=lax` cookies named
-    `dt_access` / `dt_refresh`, never in response bodies or localStorage
-  - store refresh tokens hashed; rotate them on refresh; logout revokes them
-- **Protected routes:** every route except `/health` and `/auth/login|refresh` requires
-  `requireAuth`. Role checks use `requireRole`.
-- Login failures return one generic message (no "user not found" vs "wrong password").
-  `authRateLimiter` guards credential endpoints.
+- **Passwords:** argon2id via the `PasswordHasher` port (`Argon2PasswordHasher`). Never store
+  or log plaintext. Login verifies against a dummy hash for unknown emails, so timing doesn't
+  reveal which accounts exist.
+- **Tokens** (`AuthService` + the `TokenService` port):
+  - **Access token:** HS256 JWT, 15 min, with `iss`/`aud`/`sub` claims. Verified statelessly; the
+    algorithm is pinned on verify, never taken from the token header.
+  - **Refresh token:** an opaque 32-byte random string, never a JWT. Only its SHA-256 is stored,
+    in a `sessions` record (TTL-deleted at expiry).
+  - **Rotation:** every refresh revokes the old session (`revokedReason: 'rotated'`) and creates
+    a new one, as one atomic conditional update.
+  - **Reuse:** a `rotated` token presented again within `ROTATION_GRACE_MS` (10 s) is a
+    concurrent tab, so it gets `204` with no new cookies. Later than that, it's theft: revoke
+    every session of the user (`reuse-detected`). Logged-out or locked-out tokens never get the
+    grace window.
+- **Cookies** (`presentation/http/auth/auth.cookies.ts`):
+  - `dt_access` / `dt_refresh`, `httpOnly`, `sameSite=lax` (the CSRF defence), `path=/`, no
+    domain, `secure` in production
+  - never put tokens in response bodies or localStorage
+  - a failed refresh **clears both cookies**, or the web proxy would loop between `/login` and
+    the dashboard
+- **Protecting routes:**
+  - mount new routers behind `requireAuth` in `presentation/http/app.ts`
+    (`api.use('/x', requireAuth, createXRouter(...))`)
+  - only `/health` and `/auth/login|refresh|logout` are public
+  - handlers read the caller with `getAuth(req)`; role checks use `requireRole(...)`
+- **Login errors:** one generic message for every failure ("Invalid email or password"), and
+  `createLoginRateLimiter()` (10 failed attempts per 15 min per IP) guards login.
+- **Accounts:** there's no sign-up. `pnpm db:create-admin` provisions the admin from
+  `SEED_ADMIN_*` env vars, and running it again just resets the password.
 - Validate everything at the edge with Zod; the domain trusts typed input but still normalises.
 - **Secrets:**
   - only in `.env` (git-ignored); new variables go in `config/env.ts` (with validation) and
