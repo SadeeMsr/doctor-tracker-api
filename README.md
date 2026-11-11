@@ -8,7 +8,9 @@ rotating refresh tokens, indexed search, filtering and pagination, and the dashb
 aggregations. The Next.js frontend lives in a separate repository,
 [doctor-tracker-web](https://github.com/SadeeMsr/doctor-tracker-web).
 
-> **Live API:** deployment is in progress; the URL is added here once it's live.
+> **Live API:** <https://doctor-tracker-api-h4wm.onrender.com/api/v1/health>, used by the web app at
+> <https://doctortracker-portal.vercel.app>. It runs on Render's free plan, which sleeps when idle,
+> so the first request after a quiet spell can take up to a minute.
 
 ## Contents
 
