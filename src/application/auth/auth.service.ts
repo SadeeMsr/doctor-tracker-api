@@ -9,7 +9,7 @@ import type { AccessTokenClaims, IssuedToken, TokenService } from '../ports/toke
  * Two tabs whose access tokens expire together both refresh with the same token. The browser
  * already holds the new cookies from the first, so the second is benign, not token theft.
  */
-const ROTATION_GRACE_MS = 10_000;
+export const ROTATION_GRACE_MS = 10_000;
 
 const INVALID_CREDENTIALS = 'Invalid email or password';
 const SESSION_EXPIRED = 'Your session has expired. Please sign in again.';

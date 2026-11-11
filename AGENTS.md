@@ -18,6 +18,7 @@ REST API for an admin portal that manages doctors and their patients, with dashb
 | --------------------- | ---------------------------------------------------------- |
 | Dev server (watch)    | `pnpm dev`                                                 |
 | Lint / types / format | `pnpm lint` · `pnpm typecheck` · `pnpm format`             |
+| Tests                 | `pnpm test` · `pnpm test:watch`                            |
 | Build / start         | `pnpm build` · `pnpm start`                                |
 | Production indexes    | `pnpm db:sync-indexes` (after build)                       |
 | Admin account         | `pnpm db:create-admin` (after build; reads `SEED_ADMIN_*`) |
@@ -377,10 +378,23 @@ restarts mid-request. Every endpoint must be safe to receive twice.
 
 ## Tests
 
-**Deferred.** The project focuses on finishing the app first. Don't add test files, test
-dependencies or test scripts unless you are explicitly asked to. The architecture keeps tests
-cheap to add later: every port can take an in-memory fake, and `createApp()` takes all its
-dependencies as arguments.
+Vitest + Supertest, in `tests/`. `pnpm test` runs everything in about 2 seconds, with **no
+database**: the HTTP tests run the real `createApp()`, services and domain rules on in-memory
+adapters (`tests/support/in-memory-container.ts`). That's the Clean Architecture payoff: every
+port has a fake.
+
+| Folder              | What it covers                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tests/unit`        | services and pure logic with fakes: auth rotation and theft lockout, JWT verification, analytics maths, time buckets, list parsers, search regex |
+| `tests/integration` | HTTP behaviour end to end: status codes, envelopes, cookies, auth, idempotency, filters                                                          |
+| `tests/support`     | fakes, fixtures, `buildTestApp()`, `signIn()`                                                                                                    |
+
+- **Test what a reviewer would care about:** contracts (status, `code`, `details`), security
+  rules, idempotency, and query behaviour. Not trivial pass-throughs.
+- **A fresh app per test** (`buildInMemoryContainer()` in `beforeEach`), so no state leaks.
+- **Time-dependent rules** use `vi.useFakeTimers({ toFake: ['Date'] })`, not real waiting.
+- **New port, new fake:** add it to `tests/support` and wire it in the in-memory container.
+- **Hooks:** pre-commit runs `vitest related` on staged files; pre-push and CI run the full suite.
 
 ## Git workflow
 
@@ -396,7 +410,7 @@ dependencies as arguments.
 - add, remove or upgrade a dependency
 - change the architecture, folder layout, response envelope, error codes or lint/TS config
 - change an existing index or a public endpoint's contract
-- add tests or test tooling (deferred; see Tests)
+- add test tooling beyond Vitest and Supertest
 - do anything not asked for (no drive-by refactors, no speculative abstractions, no new
   features "while you're there")
 
@@ -408,7 +422,8 @@ dependencies as arguments.
 - [ ] Repeating any request is safe: PATCH only assigns values, creates hit a unique index or
       `Idempotency-Key`, and DELETE leaves the same state.
 - [ ] Every new query filter/sort is indexed, and each index is justified in a comment.
-- [ ] `pnpm lint && pnpm typecheck && pnpm build` all pass.
+- [ ] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` all pass, with a test for new
+      behaviour (endpoint contract, rule or query).
 - [ ] You exercised it for real (curl or the web app) and reported exactly what was verified.
 - [ ] No TODOs, dead code, commented-out code or stray `console` calls.
 - [ ] `.env.example` and the README are updated if config or setup changed.

@@ -125,6 +125,21 @@ aggregations. The Next.js frontend lives in a separate repository,
 - **One-off, after the first deploy:** run `pnpm db:sync-indexes` and `pnpm db:create-admin`
   from the Render shell.
 
+## Tests
+
+```bash
+pnpm test
+```
+
+70 tests in about 2 seconds, with **no database**. Because every adapter sits behind a port, the HTTP tests run the real Express app, services and domain rules on in-memory fakes (`tests/support/in-memory-container.ts`).
+
+- **Auth:** httpOnly/SameSite cookies, one generic login error, refresh-token rotation, the concurrent-tab grace window, token-theft lockout, idempotent logout, the login rate limit, and forged or `alg: none` JWTs.
+- **Doctors and patients:** status codes and error envelopes (201 + `Location`, 404, 409, 422 with field paths), search, multi-value filters (`$in`; hospital names with commas), pagination, blocked deletion of a doctor with patients, and removing only a doctor's own patient.
+- **Idempotency:** a retried create is replayed instead of duplicated, a reused key with a different body is rejected, and a 5xx is never stored.
+- **Analytics:** % change against the previous window, zero-filled series, Monday-based weeks, and limits on chart size.
+
+Husky runs the related tests on every commit and the full suite before every push; CI runs it too.
+
 ## API reference
 
 The base path is `/api/v1`. Everything except `/health` and `/auth/login|refresh|logout` needs a

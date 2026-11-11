@@ -1,2 +1,3 @@
-# A production build catches compile errors before code leaves the machine.
+# The full test suite, then a production build, before code leaves the machine.
+pnpm test
 pnpm build
