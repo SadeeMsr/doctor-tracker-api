@@ -10,5 +10,3 @@ export function presentUser(user: User) {
     createdAt: user.createdAt.toISOString(),
   };
 }
-
-export type UserResponse = ReturnType<typeof presentUser>;

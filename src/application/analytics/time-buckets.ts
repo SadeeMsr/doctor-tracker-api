@@ -1,7 +1,7 @@
 import type { Bucket, Interval } from '../ports/analytics-query.js';
 
 /** Start of the UTC day/week (Monday)/month containing `date`. Mirrors Mongo's `$dateTrunc`. */
-export function truncateUtc(date: Date, interval: Interval): Date {
+function truncateUtc(date: Date, interval: Interval): Date {
   const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   if (interval === 'week') {
     const daysSinceMonday = (start.getUTCDay() + 6) % 7;

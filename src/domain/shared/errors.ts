@@ -2,8 +2,7 @@
  * Business-level errors. They carry no HTTP knowledge; the presentation layer decides
  * how each one is exposed (status code, body shape).
  */
-export type DomainErrorCode =
-  'NOT_FOUND' | 'CONFLICT' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'INVALID_INPUT';
+export type DomainErrorCode = 'NOT_FOUND' | 'CONFLICT' | 'UNAUTHORIZED' | 'INVALID_INPUT';
 
 export abstract class DomainError extends Error {
   abstract readonly code: DomainErrorCode;
@@ -30,10 +29,6 @@ export class ConflictError extends DomainError {
 
 export class UnauthorizedError extends DomainError {
   readonly code = 'UNAUTHORIZED';
-}
-
-export class ForbiddenError extends DomainError {
-  readonly code = 'FORBIDDEN';
 }
 
 export class InvalidInputError extends DomainError {

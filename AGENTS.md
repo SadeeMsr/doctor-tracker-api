@@ -104,7 +104,7 @@ Do not create new top-level folders, "utils" grab-bags, base classes or generic 
   - `200` read/update
   - `201` + `Location` on create
   - `204` on delete
-  - `401` unauthenticated, `403` forbidden, `404` not found
+  - `401` unauthenticated, `404` not found
   - `409` conflict
   - `422` validation
   - `429` rate limited
@@ -151,7 +151,6 @@ shape**. Nothing else writes error responses.
 | `InvalidInputError`                          | 422    | `VALIDATION_ERROR`        | optional, same shape                                        |
 | Malformed JSON body                          | 400    | `BAD_REQUEST`             | none                                                        |
 | `UnauthorizedError`                          | 401    | `UNAUTHORIZED`            | none                                                        |
-| `ForbiddenError`                             | 403    | `FORBIDDEN`               | none                                                        |
 | `NotFoundError` / unknown route              | 404    | `NOT_FOUND`               | none                                                        |
 | `ConflictError`                              | 409    | `CONFLICT`                | `{ fields: ['email'] }` when a unique field clashes         |
 | Idempotency key reused with a different body | 422    | `IDEMPOTENCY_KEY_REUSED`  | none                                                        |
@@ -252,8 +251,8 @@ restarts mid-request. Every endpoint must be safe to receive twice.
   - **A rotated token reused after the grace window is token theft.** Revoke all of that user's
     sessions (see Security rules).
 - **Scripts:**
-  - `pnpm db:create-admin` and `pnpm seed` upsert by natural key (`email`), so running them
-    twice gives the same data, not double
+  - `pnpm db:create-admin` upserts by natural key (`email`), so running it twice gives the
+    same data, not double
   - `db:sync-indexes` is naturally repeatable
 - **Server-side retries:**
   - Keep `retryWrites=true` in the Mongo URI; the driver's retryable writes are exactly-once.
@@ -364,7 +363,8 @@ restarts mid-request. Every endpoint must be safe to receive twice.
   - mount new routers behind `requireAuth` in `presentation/http/app.ts`
     (`api.use('/x', requireAuth, createXRouter(...))`)
   - only `/health` and `/auth/login|refresh|logout` are public
-  - handlers read the caller with `getAuth(req)`; role checks use `requireRole(...)`
+  - handlers read the caller with `getAuth(req)`. There is one role (admin), so there is no
+    role middleware; add one only when a second role exists
 - **Login errors:** one generic message for every failure ("Invalid email or password"), and
   `createLoginRateLimiter()` (10 failed attempts per 15 min per IP) guards login.
 - **Accounts:** there's no sign-up. `pnpm db:create-admin` provisions the admin from

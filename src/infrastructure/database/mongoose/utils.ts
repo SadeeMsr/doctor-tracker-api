@@ -1,7 +1,7 @@
 import { isValidObjectId } from 'mongoose';
 
 /** Escape user input before embedding it in a RegExp (prevents ReDoS / regex injection). */
-export function escapeRegex(value: string): string {
+function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 

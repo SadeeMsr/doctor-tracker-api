@@ -2,7 +2,6 @@ export type HttpErrorCode =
   | 'BAD_REQUEST'
   | 'VALIDATION_ERROR'
   | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'TOO_MANY_REQUESTS'

@@ -23,7 +23,7 @@ type Handler<S extends RequestSchemas> = (
 ) => Promise<void> | void;
 
 /** Parses params/query/body with Zod and swaps in the parsed (coerced, defaulted) values. */
-export function validate(schemas: RequestSchemas): RequestHandler {
+function validate(schemas: RequestSchemas): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (schemas.params) req.params = schemas.params.parse(req.params) as ParamsDictionary;
     if (schemas.query) {
