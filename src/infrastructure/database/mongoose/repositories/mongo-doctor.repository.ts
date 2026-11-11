@@ -73,8 +73,9 @@ export class MongoDoctorRepository implements DoctorRepository {
       const pattern = prefixRegex(criteria.search);
       filter.$or = [{ nameLower: pattern }, { email: pattern }];
     }
-    if (criteria.specialization) filter.specialization = criteria.specialization;
-    if (criteria.hospital) filter.hospital = criteria.hospital;
+    // `$in` keeps the specialization/hospital + createdAt indexes usable (one range per value).
+    if (criteria.specialization?.length) filter.specialization = { $in: criteria.specialization };
+    if (criteria.hospital?.length) filter.hospital = { $in: criteria.hospital };
     if (criteria.createdAt?.from || criteria.createdAt?.to) {
       filter.createdAt = {
         ...(criteria.createdAt.from && { $gte: criteria.createdAt.from }),

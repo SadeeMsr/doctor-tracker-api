@@ -19,7 +19,8 @@ const doctorSchema = new Schema(
  * Index strategy (ESR: Equality → Sort → Range):
  * - email unique: identity + duplicate protection under concurrency.
  * - nameLower: anchored prefix search and name sorting.
- * - specialization / hospital + createdAt: equality filter, then sort/range by date.
+ * - specialization / hospital + createdAt: equality (or `$in` for several values) filter, then
+ *   sort/range by date.
  * - createdAt: default listing order and date-range filters.
  */
 doctorSchema.index({ email: 1 }, { unique: true });
