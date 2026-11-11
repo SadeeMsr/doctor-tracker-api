@@ -80,6 +80,16 @@ export default defineConfig([
     rules: layer(['presentation'], ['express'], 'Infrastructure adapters must not depend on HTTP.'),
   },
   {
+    // Supertest bodies are untyped by design; asserting on them is the point of the test.
+    files: ['tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+    },
+  },
+  {
     files: ['**/*.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
