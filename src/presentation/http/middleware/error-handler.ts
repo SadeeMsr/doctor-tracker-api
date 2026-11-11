@@ -8,7 +8,6 @@ const DOMAIN_STATUS: Record<DomainErrorCode, { status: number; code: HttpError['
   NOT_FOUND: { status: 404, code: 'NOT_FOUND' },
   CONFLICT: { status: 409, code: 'CONFLICT' },
   UNAUTHORIZED: { status: 401, code: 'UNAUTHORIZED' },
-  FORBIDDEN: { status: 403, code: 'FORBIDDEN' },
   INVALID_INPUT: { status: 422, code: 'VALIDATION_ERROR' },
 };
 

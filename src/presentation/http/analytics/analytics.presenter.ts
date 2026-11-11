@@ -15,5 +15,3 @@ export function presentSummary(summary: DashboardSummary) {
     specializations: summary.specializations,
   };
 }
-
-export type SummaryResponse = ReturnType<typeof presentSummary>;

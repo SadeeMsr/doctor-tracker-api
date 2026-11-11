@@ -1,6 +1,6 @@
 import { model, Schema, type InferSchemaType } from 'mongoose';
 
-export const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
+const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 
 const idempotencyKeySchema = new Schema(
   {

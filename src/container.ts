@@ -61,5 +61,3 @@ export function buildContainer(): Container {
     idempotencyStore: new MongoIdempotencyStore(),
   };
 }
-
-export type Services = Container['services'];

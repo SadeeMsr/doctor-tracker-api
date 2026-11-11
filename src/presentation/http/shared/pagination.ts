@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { Page } from '../../../domain/shared/pagination.js';
 
-export const MAX_PAGE_SIZE = 100;
+const MAX_PAGE_SIZE = 100;
 
 export const paginationQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),

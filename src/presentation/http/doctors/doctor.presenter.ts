@@ -14,5 +14,3 @@ export function presentDoctor(doctor: DoctorWithStats) {
     updatedAt: doctor.updatedAt.toISOString(),
   };
 }
-
-export type DoctorResponse = ReturnType<typeof presentDoctor>;
