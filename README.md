@@ -12,6 +12,97 @@ aggregations. The Next.js frontend lives in a separate repository,
 > <https://doctortracker-portal.vercel.app>. It runs on Render's free plan, which sleeps when idle,
 > so the first request after a quiet spell can take up to a minute.
 
+| Evaluation                                                                                       | Result                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Backend requirements of the brief (auth, REST, indexing, query optimisation, validation, errors) | **All met** ([checklist](#backend-requirement-checklist))                                                                                                    |
+| Live API, checked from outside                                                                   | Health 200 with the database up (261 ms); protected routes 401 with the error envelope; wrong credentials give one generic 401; HSTS and CSP headers present |
+| Tests                                                                                            | **70 / 70** passing (12 files, about 2 s, no database needed)                                                                                                |
+| End-to-end, through the web app                                                                  | 122 / 122 checks across every screen (see the [web README](https://github.com/SadeeMsr/doctor-tracker-web#2-how-this-was-evaluated))                         |
+
+## Backend requirement checklist
+
+|     | Requirement                                          | How                                                                                                                              | Proven by                                                                                        |
+| --- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| ✅  | Only authenticated users                             | `requireAuth` on every router except `/health` and `/auth/*`; HS256 JWT with pinned algorithm                                    | `auth.http.test.ts` (forged and `alg: none` tokens rejected), live 401                           |
+| ✅  | Secure login                                         | argon2id, httpOnly + `SameSite=Lax` + `Secure` cookies, rotating opaque refresh tokens, theft lockout, 10 failed logins / 15 min | `auth.http.test.ts` (12), `auth.service.test.ts` (8)                                             |
+| ✅  | Doctor CRUD, search, filters, pagination             | `/doctors` with prefix search, multi-value specialization and hospital, date range, sort                                         | `doctors.http.test.ts` (10), `query-lists.test.ts`                                               |
+| ✅  | Patients under a doctor, list, edit, delete, filters | `/doctors/:id/patients`, `/patients` with condition (multi), gender, date range                                                  | `patients.http.test.ts` (7)                                                                      |
+| ✅  | Dashboard aggregation                                | `/analytics/summary`: 7 aggregates in parallel, zero-filled buckets, 30 s cache                                                  | `analytics.service.test.ts`, `time-buckets.test.ts`                                              |
+| ✅  | Proper indexing, efficient queries                   | An index per filter and sort (ESR order); anchored prefix search; no per-row queries; `$lookup` after `$limit`                   | [index table](#2-an-index-for-every-query-rather-than-add-indexes-later), `prefix-regex.test.ts` |
+| ✅  | Validation and error handling                        | Zod at the edge, one error envelope with stable codes and `requestId`                                                            | every HTTP test asserts status, `code` and `details`                                             |
+| ✅  | Safe retries                                         | Unique email index; required `Idempotency-Key` on patient creates                                                                | `idempotency.http.test.ts` (8)                                                                   |
+
+## Flows
+
+**Login, refresh and rotation**
+
+```mermaid
+sequenceDiagram
+    participant B as Browser (via Vercel /api proxy)
+    participant A as API
+    participant D as MongoDB
+    B->>A: POST /auth/login
+    A->>D: verify argon2id hash, create session (SHA-256 of refresh token)
+    A-->>B: 200 + dt_access (15 min JWT) + dt_refresh (opaque) cookies
+    B->>A: GET /doctors (access token expired)
+    A-->>B: 401 UNAUTHORIZED
+    B->>A: POST /auth/refresh
+    A->>D: revokeIfActive(old) and create new session, atomically
+    A-->>B: 204 + new cookies
+    B->>A: retry GET /doctors
+    A-->>B: 200
+    Note over A,D: Old token reused within 10 s: concurrent tab, 204 with no cookies.<br/>Later: theft, every session of the user is revoked.
+```
+
+**Idempotent patient create**
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant M as idempotency middleware
+    participant S as PatientService
+    C->>M: POST /doctors/:id/patients (Idempotency-Key: k)
+    M->>M: claim k with an atomic insert (unique index)
+    alt new key
+        M->>S: create patient
+        S-->>M: 201
+        M-->>C: 201 (response stored for 24 h)
+    else same key, same body, finished
+        M-->>C: stored 201 + Idempotent-Replayed: true
+    else same key, still running
+        M-->>C: 409 IDEMPOTENCY_IN_PROGRESS
+    else same key, different body
+        M-->>C: 422 IDEMPOTENCY_KEY_REUSED
+    end
+```
+
+**A refresh token's life**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active: login or refresh
+    Active --> Rotated: refresh (new session issued)
+    Active --> Revoked: logout
+    Active --> Expired: TTL (sessions TTL index)
+    Rotated --> Rotated: reused within 10 s (benign, 204)
+    Rotated --> Revoked: reused later (theft: all user sessions revoked)
+    Revoked --> [*]
+    Expired --> [*]
+```
+
+**Data model today**
+
+```mermaid
+erDiagram
+    DOCTOR ||--o{ PATIENT : "cares for (doctorId)"
+    USER ||--o{ SESSION : "signs in with"
+    USER ||--o{ IDEMPOTENCY_KEY : "scopes"
+```
+
+The many-to-many evolution (doctors, hospitals, affiliations, admissions) is in [Scalability considerations](#scalability-considerations).
+
+**Known edge case:** if a client navigation aborts a refresh mid-flight, the browser keeps the old token, and reusing it after the 10 s grace window is treated as theft. Planned fix: when the replacement session has never been used, rotate again instead of revoking.
+
 ## Contents
 
 - [Tech stack](#tech-stack)
