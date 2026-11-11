@@ -7,8 +7,10 @@ export type DoctorSortField = 'createdAt' | 'name';
 export interface DoctorListCriteria {
   /** Case-insensitive prefix match on name or email. */
   search?: string;
-  specialization?: Specialization;
-  hospital?: string;
+  /** Matches any of these (OR within the filter; filters combine with AND). */
+  specialization?: Specialization[];
+  /** Matches any of these hospitals. */
+  hospital?: string[];
   createdAt?: DateRange;
   sortBy: DoctorSortField;
   sortOrder: SortOrder;

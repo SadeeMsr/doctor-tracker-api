@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { GENDERS, PATIENT_CONDITIONS } from '../../../domain/patient/patient.entity.js';
 import { emailField, personName, phoneField } from '../shared/fields.js';
 import { dateRangeQuery, optionalText, paginationQuery } from '../shared/pagination.js';
+import { csvList } from '../shared/query-lists.js';
 import { idString } from '../shared/params.js';
 
 const dateOfBirth = z.coerce
@@ -48,16 +49,7 @@ export const updatePatientBody = patientFields
   });
 
 /** `?condition=critical,stable` or `?condition=critical&condition=stable`. */
-const conditionList = z.preprocess(
-  (value) => {
-    const parts = (Array.isArray(value) ? value : [value])
-      .flatMap((part) => (typeof part === 'string' ? part.split(',') : []))
-      .map((part) => part.trim())
-      .filter(Boolean);
-    return parts.length ? parts : undefined;
-  },
-  z.array(z.enum(PATIENT_CONDITIONS)).optional(),
-);
+const conditionList = csvList(z.enum(PATIENT_CONDITIONS));
 
 const patientFilters = paginationQuery.extend({
   search: optionalText(100),
