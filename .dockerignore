@@ -1,0 +1,15 @@
+# Only package manifests, tsconfig and src/ are needed to build the image.
+node_modules
+dist
+coverage
+tests
+docs
+.git
+.github
+.husky
+.env
+.env.*
+*.log
+Dockerfile
+docker-compose.yml
+.dockerignore

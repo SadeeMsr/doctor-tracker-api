@@ -208,6 +208,35 @@ The many-to-many evolution (doctors, hospitals, affiliations, admissions) is in 
 | `pnpm db:create-admin`         | Upsert the admin account from `SEED_ADMIN_*` (after build)           |
 | `pnpm lint` · `pnpm typecheck` | ESLint (including layer boundaries) and `tsc`                        |
 
+### Run with Docker
+
+You only need Docker. One command starts MongoDB and the API, builds the indexes and creates the admin account:
+
+```bash
+docker compose up --build
+```
+
+The API is then on <http://localhost:4000/api/v1/health>. Sign in as `admin@doctortracker.dev`
+with password `Admin@12345`. Change either one with the `SEED_ADMIN_*` variables.
+
+| Choice                                                        | Why                                                                                                                                |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Multi-stage build (build → production dependencies → runtime) | The final image holds only `dist/`, the production `node_modules` and `package.json`: no TypeScript, linters, tests or source maps |
+| `node:26.13.0-slim`, not Alpine                               | Same Node version as `.nvmrc`. `argon2` is native, and its glibc prebuilds load without a compiler                                 |
+| Manifests copied before source, plus a pnpm cache mount       | Editing code doesn't reinstall dependencies; rebuilds take seconds                                                                 |
+| Runs as the `node` user                                       | Breaking out of the app doesn't give root inside the container                                                                     |
+| `CMD ["node", "dist/server.js"]`, not `pnpm start`            | Node is PID 1, so `docker stop` (SIGTERM) reaches the graceful shutdown: drain connections, close MongoDB, exit 0                  |
+| `HEALTHCHECK` calls `/api/v1/health`                          | The container turns unhealthy when MongoDB is unreachable (the endpoint returns 503); Node's `fetch` replaces curl                 |
+| A one-shot `setup` service in compose                         | Runs `sync-indexes` and `create-admin` before the API starts. Both are safe to repeat, so every `up` is safe                       |
+| `.dockerignore`                                               | `.env`, `.git`, tests and `node_modules` never reach the build context                                                             |
+
+CI proves this works on every push. The `docker` job builds the image, starts the stack, checks
+the healthcheck and the non-root user, signs in, and checks that `docker stop` exits with code
+`0`.
+
+Production still runs on Render's Node runtime, as described below. The image is ready for any
+container host (Render's Docker runtime, Fly.io, Cloud Run, ECS) with no code changes.
+
 ### Production (Render + Atlas)
 
 - **Build command:** `pnpm install && pnpm build`
