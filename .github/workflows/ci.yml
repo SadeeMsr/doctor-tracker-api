@@ -52,6 +52,8 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker compose logs
-      - name: Image size
+      - name: Image size, by layer
         if: always()
-        run: docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep api || true
+        run: |
+          docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep api-api || true
+          docker history --format '{{.Size}}\t{{.CreatedBy}}' "$(docker compose images -q api)" | cut -c1-120 || true
