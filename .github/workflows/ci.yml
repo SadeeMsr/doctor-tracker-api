@@ -27,3 +27,33 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  # Builds the production image and smoke-tests it against a real MongoDB via docker compose.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the stack
+        run: docker compose up --build --detach --wait --wait-timeout 180 api
+      - name: Health check passes and the container runs as non-root
+        run: |
+          curl --fail --silent http://localhost:4000/api/v1/health
+          test "$(docker compose exec -T api id -u)" != "0"
+      - name: Admin can sign in
+        run: |
+          curl --fail --silent --output /dev/null --write-out '%{http_code}\n' \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"admin@doctortracker.dev","password":"Admin@12345"}' \
+            http://localhost:4000/api/v1/auth/login
+      - name: Graceful shutdown on SIGTERM (exit code 0)
+        run: |
+          docker compose stop api
+          test "$(docker inspect --format '{{.State.ExitCode}}' "$(docker compose ps -aq api)")" = "0"
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Image size, by layer
+        if: always()
+        run: |
+          docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep api-api || true
+          docker history --format '{{.Size}}\t{{.CreatedBy}}' "$(docker compose images -q api)" | cut -c1-120 || true
